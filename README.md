@@ -120,11 +120,3 @@ MIT License
 
 ---
 
-If you want, I can also create:
-
-✔ A banner image matching this project
-✔ Badges section (HTML, JS, MIT License, Status)
-✔ A minimal or advanced README version
-✔ Icons for your GitHub repo
-
-Just tell me **“add badges”** or **“generate banner”**.
