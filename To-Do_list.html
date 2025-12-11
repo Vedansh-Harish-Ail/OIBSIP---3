@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Task Manager</title>
+<style>
+  :root{
+    --bg:#f8fafc; --surface:#ffffff; --text:#1e293b;
+    --primary:#3b82f6; --secondary:#64748b; --danger:#ef4444;
+  }
+  html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Arial}
+  body{background:var(--bg);color:var(--text)}
+  .wrap{max-width:900px;margin:32px auto;padding:20px}
+  header h1{margin:0 0 6px;font-size:32px}
+  header p{margin:0;color:var(--secondary)}
+  .card{background:var(--surface);padding:16px;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.06);margin:20px 0}
+  form{display:flex;gap:10px;flex-wrap:wrap}
+  input[type="text"]{flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:8px;background:var(--bg);color:var(--text);min-width:200px}
+  button{padding:10px 14px;border-radius:8px;border:0;cursor:pointer;font-weight:600}
+  .btn-primary{background:var(--primary);color:#fff}
+  .btn-danger{background:var(--danger);color:#fff}
+  .section-title{font-size:20px;margin:8px 0}
+  .list{display:flex;flex-direction:column;gap:10px}
+  .task{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:8px;border:1px solid #e6eef7;background:#fff}
+  .task p{margin:0;word-break:break-word}
+  .task .meta{font-size:12px;color:var(--secondary);margin-top:6px}
+  .actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .small-btn{padding:6px 8px;border-radius:6px;border:0;cursor:pointer;font-size:13px}
+  .small-edit{background:var(--secondary);color:#fff}
+  .small-delete{background:var(--danger);color:#fff}
+  .delete-confirm{background:#c23939}
+  .strike{text-decoration:line-through;opacity:.6}
+  .toast{position:fixed;top:18px;right:18px;padding:10px 14px;border-radius:8px;color:#fff;z-index:9999;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+  @media (max-width:600px){ .wrap{padding:12px} form{flex-direction:column} .actions{margin-left:0} }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1 id="app-title">My Tasks</h1>
+      <p id="app-sub">Stay organized and productive</p>
+    </header>
+
+    <div class="card">
+      <form id="task-form" autocomplete="off">
+        <label for="task-input" class="sr-only">Task</label>
+        <input id="task-input" type="text" placeholder="Enter a new task..." required>
+        <button id="add-button" class="btn-primary" type="submit">Add Task</button>
+      </form>
+    </div>
+
+    <div>
+      <h2 class="section-title" id="pending-title">Pending Tasks</h2>
+      <div id="pending-list" class="list">
+        <p style="color:#94a3b8;padding:20px;text-align:center">No pending tasks. Add one above!</p>
+      </div>
+    </div>
+
+    <div style="margin-top:18px">
+      <h2 class="section-title" id="completed-title">Completed Tasks</h2>
+      <div id="completed-list" class="list">
+        <p style="color:#94a3b8;padding:20px;text-align:center">No completed tasks yet</p>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* Simple localStorage-backed task app (short, plain JS) */
+
+const STORAGE = 'simple_tasks_v1';
+let tasks = [];
+let editingId = null;
+let deleteConfirmId = null;
+
+const $ = id => document.getElementById(id);
+const toast = (msg, err=false) => {
+  const d = document.createElement('div');
+  d.className = 'toast';
+  d.textContent = msg;
+  d.style.background = err ? 'var(--danger)' : '#10b981';
+  document.body.appendChild(d);
+  setTimeout(()=>d.remove(), 2600);
+};
+const fmt = s => new Date(s).toLocaleString();
+
+function load(){
+  try { tasks = JSON.parse(localStorage.getItem(STORAGE) || '[]'); }
+  catch(e){ tasks = [] }
+  render();
+}
+
+function saveAll(){
+  try { localStorage.setItem(STORAGE, JSON.stringify(tasks)); } catch(e){}
+}
+
+function createTaskEl(t){
+  const wrap = document.createElement('div');
+  wrap.className = 'task';
+  wrap.dataset.id = t.id;
+
+  const chk = document.createElement('input');
+  chk.type = 'checkbox';
+  chk.checked = !!t.completed;
+  chk.addEventListener('change', ()=> toggleComplete(t.id));
+  wrap.appendChild(chk);
+
+  const content = document.createElement('div');
+  content.style.minWidth = '0';
+  const p = document.createElement('p');
+  p.textContent = t.text;
+  if(t.completed) p.className = 'strike';
+  content.appendChild(p);
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.textContent = 'Created: ' + fmt(t.createdAt) + (t.completedAt ? ' • Completed: ' + fmt(t.completedAt) : '');
+  content.appendChild(meta);
+
+  wrap.appendChild(content);
+
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+
+  const edit = document.createElement('button');
+  edit.className = 'small-btn small-edit';
+  edit.textContent = 'Edit';
+  edit.addEventListener('click', ()=> startEdit(t.id, wrap));
+  actions.appendChild(edit);
+
+  const del = document.createElement('button');
+  del.className = 'small-btn small-delete';
+  del.textContent = deleteConfirmId === t.id ? 'Confirm?' : 'Delete';
+  if(deleteConfirmId === t.id) del.classList.add('delete-confirm');
+  del.addEventListener('click', ()=> handleDeleteClick(t.id));
+  actions.appendChild(del);
+
+  wrap.appendChild(actions);
+  return wrap;
+}
+
+function render(){
+  const pending = $('pending-list');
+  const completed = $('completed-list');
+  const P = tasks.filter(x=>!x.completed);
+  const C = tasks.filter(x=>x.completed);
+
+  pending.innerHTML = '';
+  if(P.length === 0){
+    const p = document.createElement('p'); p.style.color='#94a3b8'; p.style.padding='20px'; p.style.textAlign='center'; p.textContent = 'No pending tasks. Add one above!';
+    pending.appendChild(p);
+  } else P.forEach(t=> pending.appendChild(createTaskEl(t)));
+
+  completed.innerHTML = '';
+  if(C.length === 0){
+    const p = document.createElement('p'); p.style.color='#94a3b8'; p.style.padding='20px'; p.style.textAlign='center'; p.textContent = 'No completed tasks yet';
+    completed.appendChild(p);
+  } else C.forEach(t=> completed.appendChild(createTaskEl(t)));
+}
+
+function addTask(text){
+  if(tasks.length >= 999){ toast('Maximum 999 tasks reached. Delete some first.', true); return; }
+  const t = { id: Date.now().toString(), text, completed:false, createdAt: new Date().toISOString(), completedAt: null };
+  tasks.push(t);
+  saveAll();
+  render();
+  toast('Task added successfully');
+}
+
+function startEdit(id, el){
+  if(editingId){ toast('Finish current edit first', true); return; }
+  editingId = id;
+  const task = tasks.find(x=>x.id===id);
+  const content = el.querySelector('div');
+  const orig = task.text;
+  content.innerHTML = '';
+  const input = document.createElement('input');
+  input.type = 'text'; input.value = orig; input.style.width = '100%'; input.style.padding = '8px'; input.style.marginBottom = '6px';
+  content.appendChild(input);
+
+  const btnWrap = document.createElement('div');
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'small-btn btn-primary'; saveBtn.textContent = 'Save';
+  saveBtn.addEventListener('click', async ()=>{
+    const v = input.value.trim();
+    if(!v){ toast('Task cannot be empty', true); return; }
+    saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
+    task.text = v;
+    saveAll(); editingId = null; render();
+  });
+  const cancel = document.createElement('button');
+  cancel.className = 'small-btn'; cancel.style.marginLeft = '8px'; cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', ()=>{ editingId = null; render() });
+  btnWrap.appendChild(saveBtn); btnWrap.appendChild(cancel);
+  content.appendChild(btnWrap);
+  input.focus();
+}
+
+function handleDeleteClick(id){
+  if(deleteConfirmId === id){
+    tasks = tasks.filter(x=>x.id !== id);
+    deleteConfirmId = null;
+    saveAll();
+    render();
+    toast('Task deleted');
+    return;
+  }
+  deleteConfirmId = id;
+  render();
+  setTimeout(()=>{ if(deleteConfirmId === id){ deleteConfirmId = null; render(); } }, 3000);
+}
+
+function toggleComplete(id){
+  const t = tasks.find(x=>x.id===id);
+  if(!t) return;
+  t.completed = !t.completed;
+  t.completedAt = t.completed ? new Date().toISOString() : null;
+  saveAll();
+  render();
+}
+
+document.getElementById('task-form').addEventListener('submit', e=>{
+  e.preventDefault();
+  const input = $('task-input');
+  const text = input.value.trim();
+  if(!text) return;
+  addTask(text);
+  input.value = '';
+});
+
+load();
+</script>
+</body>
+</html>
