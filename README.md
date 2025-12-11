@@ -1,5 +1,3 @@
-Here is a **clean, appealing, professional GitHub-ready README** for your **Task Manager Web App**, fully based on the code you uploaded  and written in a simple, polished style with no comments and no extra clutter.
-
 ---
 
 # **Task Manager — A Simple and Clean To-Do App**
