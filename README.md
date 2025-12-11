@@ -1,3 +1,9 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![HTML5](https://img.shields.io/badge/HTML5-%3E%3D5-orange.svg)](#)
+[![CSS](https://img.shields.io/badge/CSS-Custom-lightgrey.svg)](#)
+[![JS](https://img.shields.io/badge/JavaScript-vanilla-yellow.svg)](#)
+[![Status](https://img.shields.io/badge/status-active-brightgreen.svg)](#)
+
 ---
 
 # **Task Manager — A Simple and Clean To-Do App**
